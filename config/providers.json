@@ -1,0 +1,152 @@
+{
+  "sky": {
+    "name": "Sky Broadband",
+    "enabled": true,
+    "url": "https://www.sky.com/broadband",
+    "timeout": 30000,
+    "wait_for_selector": "body",
+    "cookie_selectors": [
+      "button[data-test='reject-all']",
+      "button:has-text('Reject All')",
+      "#onetrust-reject-all-handler"
+    ],
+    "postcode_input_selector": "input[name='postcode']",
+    "postcode_submit_selector": "button[type='submit']",
+    "address_dropdown_selector": "select[name='address']",
+    "deal_container_selector": ".deal-card",
+    "extraction_map": {
+      "deal_name": ".deal-title",
+      "monthly_price": ".price-monthly",
+      "upfront_cost": ".price-upfront",
+      "download_speed": ".speed-download",
+      "upload_speed": ".speed-upload",
+      "contract_length": ".contract-term",
+      "data_allowance": ".data-allowance"
+    }
+  },
+  "bt": {
+    "name": "BT Broadband",
+    "enabled": true,
+    "url": "https://www.bt.com/broadband",
+    "timeout": 30000,
+    "wait_for_selector": "body",
+    "cookie_selectors": [
+      "button[data-cookie-reject='true']",
+      "button:has-text('Reject')",
+      ".cookie-banner__reject"
+    ],
+    "postcode_input_selector": "input[id='postcode']",
+    "postcode_submit_selector": "button.postcode-search",
+    "address_dropdown_selector": "select#address-list",
+    "deal_container_selector": ".product-card",
+    "extraction_map": {
+      "deal_name": ".product-name",
+      "monthly_price": ".monthly-cost",
+      "upfront_cost": ".upfront-cost",
+      "download_speed": ".speed-info .download",
+      "upload_speed": ".speed-info .upload",
+      "contract_length": ".contract-info",
+      "data_allowance": ".data-info"
+    }
+  },
+  "ee": {
+    "name": "EE Broadband",
+    "enabled": true,
+    "url": "https://ee.co.uk/broadband",
+    "timeout": 30000,
+    "wait_for_selector": "body",
+    "cookie_selectors": [
+      "button[data-test='cookie-reject']",
+      "button:has-text('Reject all')",
+      ".cookie-banner button.reject"
+    ],
+    "postcode_input_selector": "input[name='postcode']",
+    "postcode_submit_selector": "button.check-availability",
+    "address_dropdown_selector": "select[name='address']",
+    "deal_container_selector": ".package-tile",
+    "extraction_map": {
+      "deal_name": ".package-name",
+      "monthly_price": ".price .amount",
+      "upfront_cost": ".upfront .amount",
+      "download_speed": ".speed-download .value",
+      "upload_speed": ".speed-upload .value",
+      "contract_length": ".contract-length",
+      "data_allowance": ".data-cap"
+    }
+  },
+  "hyperoptic": {
+    "name": "Hyperoptic",
+    "enabled": true,
+    "url": "https://www.hyperoptic.com/",
+    "timeout": 30000,
+    "wait_for_selector": "body",
+    "cookie_selectors": [
+      "button[data-action='reject']",
+      "button:has-text('Reject')",
+      ".cookie-consent__reject"
+    ],
+    "postcode_input_selector": "input#postcode-search",
+    "postcode_submit_selector": "button.search-submit",
+    "address_dropdown_selector": "select#property-select",
+    "deal_container_selector": ".package",
+    "extraction_map": {
+      "deal_name": ".package-title",
+      "monthly_price": ".price-value",
+      "upfront_cost": ".setup-fee",
+      "download_speed": ".speed-value",
+      "upload_speed": ".upload-speed",
+      "contract_length": ".term-length",
+      "data_allowance": ".data-limit"
+    }
+  },
+  "virgin_media": {
+    "name": "Virgin Media",
+    "enabled": true,
+    "url": "https://www.virginmedia.com/broadband",
+    "timeout": 30000,
+    "wait_for_selector": "body",
+    "cookie_selectors": [
+      "button#onetrust-reject-all-handler",
+      "button:has-text('Reject All')",
+      ".ot-sdk-button.ot-sdk-reject"
+    ],
+    "postcode_input_selector": "input[name='postcode']",
+    "postcode_submit_selector": "button.postcode-checker",
+    "address_dropdown_selector": "select.address-select",
+    "deal_container_selector": ".product-tile",
+    "extraction_map": {
+      "deal_name": ".product-title",
+      "monthly_price": ".monthly-price .value",
+      "upfront_cost": ".upfront-price .value",
+      "download_speed": ".speed-info .download-speed",
+      "upload_speed": ".speed-info .upload-speed",
+      "contract_length": ".contract-details",
+      "data_allowance": ".allowance"
+    }
+  },
+  "vodafone": {
+    "name": "Vodafone Broadband",
+    "enabled": true,
+    "url": "https://www.vodafone.co.uk/broadband",
+    "timeout": 30000,
+    "wait_for_selector": "body",
+    "cookie_selectors": [
+      "button[data-cookie-decline='true']",
+      "button:has-text('Decline')",
+      ".cookie-notice__decline"
+    ],
+    "postcode_input_selector": "input#postcode",
+    "postcode_submit_selector": "button.availability-check",
+    "address_dropdown_selector": "select#address",
+    "deal_container_selector": ".offer-card",
+    "extraction_map": {
+      "deal_name": ".offer-title",
+      "monthly_price": ".price-monthly .amount",
+      "upfront_cost": ".price-upfront .amount",
+      "download_speed": ".broadband-speed .download",
+      "upload_speed": ".broadband-speed .upload",
+      "contract_length": ".term",
+      "data_allowance": ".data"
+    }
+  }
+}
