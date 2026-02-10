@@ -9,10 +9,16 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 import sys
 
-if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+# if sys.platform.startswith("win"):
+#     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
+def install_playwright_browsers():
+    if not os.path.exists('/root/.cache/ms-playwright'):  # Check the path where browsers are cached
+        subprocess.run(['playwright', 'install'], check=True)
+ 
+# Run the installation process when the app starts
+install_playwright_browsers()
 
 from src.orchestrator import Orchestrator
 from src.utils.logger import setup_logger
@@ -328,3 +334,4 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
