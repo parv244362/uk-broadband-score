@@ -1,4 +1,46 @@
 """Streamlit web application for UK Broadband Price Comparison Tool."""
+# --- Playwright bootstrap (portable + Cloud-safe) ---
+import os, sys, subprocess
+from pathlib import Path
+
+# Use a writable cache; works locally and on Streamlit Cloud
+os.environ.setdefault("XDG_CACHE_HOME", str(Path.home() / ".cache"))
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(Path.home() / ".cache" / "ms-playwright"))
+
+def _chrome_exists(cache: Path) -> bool:
+    patterns = [
+        "**/chrome-linux/chrome",
+        "**/chrome-win/chrome.exe",
+        "**/chrome-mac/Chromium.app/Contents/MacOS/Chromium",
+    ]
+    for pat in patterns:
+        if any(cache.glob(pat)):
+            return True
+    return False
+
+def ensure_playwright_chromium():
+    cache = Path(os.environ["PLAYWRIGHT_BROWSERS_PATH"])
+    cache.mkdir(parents=True, exist_ok=True)
+
+    if _chrome_exists(cache):
+        return  # already installed
+
+    # Install only Chromium; DO NOT use --with-deps on Streamlit Cloud
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env={**os.environ},
+        )
+    except subprocess.CalledProcessError as e:
+        # Don’t crash the app; log and let later code surface a clearer error if needed
+        print("[playwright-install] failed\n", e.stdout or e)
+
+ensure_playwright_chromium()
+--------------------------------------------
 
 import streamlit as st
 import asyncio
@@ -13,12 +55,12 @@ import sys
 #     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
-def install_playwright_browsers():
-    if not os.path.exists('/root/.cache/ms-playwright'):  # Check the path where browsers are cached
-        subprocess.run(['playwright', 'install'], check=True)
+# def install_playwright_browsers():
+#     if not os.path.exists('/root/.cache/ms-playwright'):  # Check the path where browsers are cached
+#         subprocess.run(['playwright', 'install'], check=True)
  
 # Run the installation process when the app starts
-install_playwright_browsers()
+# install_playwright_browsers()
 
 from src.orchestrator import Orchestrator
 from src.utils.logger import setup_logger
@@ -334,4 +376,5 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 
