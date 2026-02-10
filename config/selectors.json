@@ -1,0 +1,63 @@
+{
+  "common_selectors": {
+    "cookie_banners": [
+      "#onetrust-banner-sdk",
+      ".cookie-banner",
+      ".cookie-notice",
+      "[data-testid='cookie-banner']",
+      ".ot-sdk-container"
+    ],
+    "cookie_reject_buttons": [
+      "button[id*='reject']",
+      "button[class*='reject']",
+      "button:has-text('Reject')",
+      "button:has-text('Decline')",
+      "button:has-text('Reject All')",
+      "a:has-text('Reject')"
+    ],
+    "loading_indicators": [
+      ".loading",
+      ".spinner",
+      "[data-loading='true']",
+      ".loader"
+    ]
+  },
+  "form_selectors": {
+    "postcode_inputs": [
+      "input[name='postcode']",
+      "input[id*='postcode']",
+      "input[placeholder*='postcode' i]",
+      "input[aria-label*='postcode' i]"
+    ],
+    "submit_buttons": [
+      "button[type='submit']",
+      "button:has-text('Check')",
+      "button:has-text('Search')",
+      "button:has-text('Find')",
+      "input[type='submit']"
+    ],
+    "address_selectors": [
+      "select[name*='address']",
+      "select[id*='address']",
+      ".address-select",
+      "[data-testid='address-select']"
+    ]
+  },
+  "data_extraction": {
+    "price_patterns": [
+      "£\\d+\\.?\\d*",
+      "£\\d+",
+      "\\d+\\.?\\d*\\s*(?:per|/)?\\s*(?:month|mth)",
+      "\\d+\\.?\\d*"
+    ],
+    "speed_patterns": [
+      "(\\d+)\\s*(?:Mb|MB|Mbps)",
+      "(\\d+\\.\\d+)\\s*(?:Gb|GB|Gbps)",
+      "(\\d+)"
+    ],
+    "contract_patterns": [
+      "(\\d+)\\s*(?:month|months|mth|mths)",
+      "(\\d+)\\s*(?:M|mo)"
+    ]
+  }
+}
