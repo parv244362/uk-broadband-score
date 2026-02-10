@@ -1,0 +1,588 @@
+"""Sky Broadband scraper implementation - Updated for 2026 website."""
+
+import re
+from typing import List, Dict, Any, Optional
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+from src.scrapers.base_scraper import BaseScraper
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
+
+
+class SkyScraper(BaseScraper):
+    """
+    Scraper for Sky Broadband (2026 version).
+    
+    The current Sky website displays deals directly on the main page
+    without requiring postcode entry on the landing page.
+    """
+    
+    @property
+    def provider_name(self) -> str:
+        return "sky"
+    
+    async def handle_cookies(self) -> bool:
+        """Handle cookie consent on Sky website."""
+        try:
+            # Look for reject/accept buttons
+            cookie_buttons = [
+                "button:has-text('Reject')",
+                "button:has-text('Accept')",
+                "#onetrust-reject-all-handler",
+                ".cookie-banner button"
+            ]
+            
+            for selector in cookie_buttons:
+                try:
+                    button = self.page.locator(selector).first
+                    if await button.is_visible(timeout=3000):
+                        await button.click()
+                        await self.page.wait_for_timeout(1000)
+                        logger.info(f"{self.provider_name.upper()}: Handled cookies")
+                        return True
+                except Exception:
+                    continue
+                    
+            logger.info(f"{self.provider_name.upper()}: No cookie banner found")
+            return False
+        except Exception as e:
+            logger.debug(f"{self.provider_name.upper()}: Cookie handling error: {e}")
+            return False
+    
+    async def scrape(self, postcode: str, address: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Scrape Sky broadband deals.
+        
+        The 2026 Sky website shows deals directly on the main page.
+        We'll extract the deals from the broadband speed section.
+        """
+        deals = []
+        
+        try:
+            # Navigate to Sky broadband page
+            await self.navigate()
+            
+            # Handle cookies
+            await self.handle_cookies()
+            
+            # Wait for the speed section to load
+            await self.page.wait_for_selector("text=Choose your broadband speed", timeout=10000)
+            await self.page.wait_for_timeout(2000)
+            
+            logger.info(f"{self.provider_name.upper()}: Page loaded, extracting deals")
+            
+            # Extract deals from the page
+            deals = await self._extract_deals_from_page()
+            
+            logger.info(f"{self.provider_name.upper()}: Found {len(deals)} deals")
+            
+        except Exception as e:
+            logger.error(f"{self.provider_name.upper()}: Scraping failed: {e}")
+        
+        return deals
+    
+    async def _extract_deals_from_page(self) -> List[Dict[str, Any]]:
+        """Extract broadband deals from the main page."""
+        deals = []
+        
+        try:
+            # Look for broadband deal cards
+            # Sky displays deals with speed info (e.g., "Full Fibre 100", "300 Mbps")
+            # and pricing (e.g., "£26/month")
+            
+            # Wait for content to be visible
+            await self.page.wait_for_timeout(1000)
+            
+            # Get all text content to parse deals
+            content = await self.page.content()
+            
+            # Pattern matching for Sky deals
+            # Looking for patterns like: "Full Fibre 100" ... "100 Mbps" ... "£26/month"
+            
+            deal_patterns = [
+                r'Full Fibre (\d+).*?(\d+)\s*Mbps.*?£(\d+)/month',
+                r'Full Fibre Gigafast\+?.*?(\d+)\s*Gbps.*?£(\d+)/month',
+            ]
+            
+            # Try to find deal cards using specific Sky structure
+            deal_sections = await self.page.locator("section:has-text('Choose your broadband speed')").all()
+            
+            if deal_sections:
+                # Extract text from the broadband section
+                section_text = await deal_sections[0].inner_text()
+                
+                # Parse different deal types
+                deals_data = [
+                    {"name": "Full Fibre 100", "speed": "100", "unit": "Mbps", "price_pattern": r'Full Fibre 100.*?£(\d+)/month'},
+                    {"name": "Full Fibre 150", "speed": "150", "unit": "Mbps", "price_pattern": r'Full Fibre 150.*?£(\d+)/month'},
+                    {"name": "Full Fibre 300", "speed": "300", "unit": "Mbps", "price_pattern": r'Full Fibre 300.*?£(\d+)/month'},
+                    {"name": "Full Fibre 500", "speed": "500", "unit": "Mbps", "price_pattern": r'Full Fibre 500.*?£(\d+)/month'},
+                    {"name": "Full Fibre Gigafast", "speed": "900", "unit": "Mbps", "price_pattern": r'Full Fibre Gigafast[^+].*?£(\d+)/month'},
+                    {"name": "Full Fibre Gigafast+", "speed": "5", "unit": "Gbps", "price_pattern": r'Full Fibre Gigafast\+.*?£(\d+)/month'},
+                ]
+                
+                for deal_info in deals_data:
+                    price_match = re.search(deal_info["price_pattern"], section_text, re.DOTALL | re.IGNORECASE)
+                    if price_match:
+                        price = price_match.group(1)
+                        
+                        # Convert Gbps to Mbps for consistency
+                        download_speed = deal_info["speed"]
+                        if deal_info["unit"] == "Gbps":
+                            download_speed = str(int(download_speed) * 1000)
+                        
+                        deal = {
+                            "deal_name": deal_info["name"],
+                            "provider": "Sky",
+                            "monthly_price": float(price),
+                            "upfront_cost": 0.0,  # Sky shows "No upfront fees"
+                            "download_speed": int(download_speed),
+                            "upload_speed": None,
+                            "contract_length": 24,  # Sky shows "24 month contract"
+                            "data_allowance": "Unlimited",
+                            "promotional_text": "No upfront fees",
+                        }
+                        
+                        deals.append(deal)
+                        logger.debug(f"{self.provider_name.upper()}: Extracted {deal['deal_name']} - £{price}/month")
+            
+        except Exception as e:
+            logger.error(f"{self.provider_name.upper()}: Error extracting deals: {e}")
+        
+        return deals
+                logger.warning(f"{self.provider_name.upper()}: Did not detect /broadband/buy navigation")
+            await self._await_page_settle()
+        
+        return clicked
+    
+    async def enter_postcode(self, postcode: str) -> bool:
+        """Enter postcode with Sky-specific handling."""
+        success = await super().enter_postcode(postcode)
+        
+        # Sky-specific: explicit submit button
+        try:
+            submit = self.page.locator("button[data-test-id='postcode-lookup-submit']").first
+            if await submit.is_visible(timeout=1500):
+                await submit.click()
+                logger.info(f"{self.provider_name.upper()}: Clicked postcode lookup submit")
+                await self._await_page_settle()
+        except Exception:
+            pass
+        
+        return success
+    
+    async def _select_first_address(self) -> bool:
+        """Select first valid address from dropdown."""
+        try:
+            menu = self.page.locator("select#addressReference, select[data-test-id='address-select-field']").first
+            
+            if await menu.count() == 0:
+                return False
+            
+            options = menu.locator("option:not([disabled])")
+            count = await options.count()
+            
+            if count <= 1:
+                return False
+            
+            # Get all option values
+            values = await options.evaluate_all("els => els.map(el => el.getAttribute('value'))")
+            
+            # Find first valid address (skip default/placeholder options)
+            pick_value = None
+            for val in values:
+                if not val or val.strip().lower() in ("default", "my address isn't listed", ""):
+                    continue
+                pick_value = val
+                break
+            
+            if not pick_value and count > 1:
+                pick_value = await options.nth(1).get_attribute("value")
+            
+            if pick_value:
+                await menu.select_option(value=pick_value)
+                await self._await_page_settle()
+                logger.info(f"{self.provider_name.upper()}: Selected address")
+                return True
+        
+        except Exception as e:
+            logger.warning(f"{self.provider_name.upper()}: Address selection failed: {str(e)}")
+        
+        return False
+    
+    async def _handle_moving_prompt(self) -> bool:
+        """Handle 'Are you moving to this address?' prompt."""
+        try:
+            prompt = self.page.locator("text=/are you moving to this address/i")
+            if await prompt.count() == 0:
+                return False
+            
+            # Try multiple selection methods
+            targets = [
+                self.page.locator("label", has_text=re.compile("i live here", re.I)).first,
+                self.page.locator("button", has_text=re.compile("i live here", re.I)).first,
+                self.page.locator("input[aria-label='i live here' i]").first,
+            ]
+            
+            for target in targets:
+                if await target.count() > 0:
+                    try:
+                        await target.click()
+                        logger.info(f"{self.provider_name.upper()}: Confirmed 'I live here'")
+                        await self._await_page_settle()
+                        break
+                    except Exception:
+                        continue
+            
+            # Submit the selection
+            submit_btn = self.page.locator("button[data-test-id='addressStatus-submit']").first
+            if await submit_btn.is_visible(timeout=2000):
+                await submit_btn.click()
+                logger.info(f"{self.provider_name.upper()}: Submitted address status")
+                await self._await_page_settle()
+            
+            return True
+        
+        except Exception as e:
+            logger.debug(f"{self.provider_name.upper()}: No moving prompt found")
+        
+        return False
+    
+    async def _click_final_cta(self) -> bool:
+        """Click final CTA to show results."""
+        return await self._click_by_keywords(
+            ["button", "a"],
+            self.FINAL_CTA_KEYWORDS,
+            "Clicked final availability CTA"
+        )
+    
+    async def _click_show_more(self) -> bool:
+        """Click 'See more speeds' button."""
+        try:
+            btn = self.page.locator("button[data-test-id='show-more-products-BUTTON']").first
+            if await btn.is_visible(timeout=2000):
+                await btn.click()
+                logger.info(f"{self.provider_name.upper()}: Clicked 'See more speeds'")
+                await self._await_page_settle()
+                return True
+        except Exception:
+            pass
+        return False
+    
+    async def _scrape_tabbed_products(self, postcode: str) -> List[Dict[str, Any]]:
+        """
+        Scrape products from tabbed layout.
+        Sky often uses tabs for different speed tiers.
+        """
+        tabs = self.page.locator("[data-test-id='bb-tab'] [role='tab'], [role='tab'][data-test-id^='bb-tab']")
+        
+        if await tabs.count() == 0:
+            return []
+        
+        deals = []
+        seen_packages = set()
+        tab_count = await tabs.count()
+        
+        logger.info(f"{self.provider_name.upper()}: Found {tab_count} speed tabs")
+        
+        for i in range(tab_count):
+            tab = tabs.nth(i)
+            
+            try:
+                # Activate tab
+                await tab.click()
+                await self._await_page_settle()
+                
+                # Get associated panel
+                panel_id = await tab.get_attribute("aria-controls")
+                if panel_id:
+                    panel = self.page.locator(f"#{panel_id}").first
+                else:
+                    panel = self.page.locator("[data-test-id='bb-tab-panel']").first
+                
+                if await panel.count() == 0:
+                    continue
+                
+                # Extract deal from panel
+                deal = await self._parse_panel(panel, postcode)
+                
+                if deal:
+                    # Deduplicate by package name and price
+                    key = (deal.get("deal_name", "").lower(), deal.get("monthly_price"))
+                    if key not in seen_packages:
+                        seen_packages.add(key)
+                        deals.append(deal)
+            
+            except Exception as e:
+                logger.warning(f"{self.provider_name.upper()}: Failed to process tab {i + 1}: {str(e)}")
+                continue
+        
+        return deals
+    
+    async def _parse_panel(self, panel, postcode: str) -> Optional[Dict[str, Any]]:
+        """Parse a single product panel."""
+        try:
+            panel_text = await panel.inner_text()
+        except Exception:
+            return None
+        
+        deal = {
+            "postcode": postcode,
+        }
+        
+        # Extract package name
+        for sel in ["[data-test-id='bb-tab-logo']", "h2", "h3"]:
+            try:
+                elem = panel.locator(sel).first
+                if sel == "[data-test-id='bb-tab-logo']":
+                    name = await elem.get_attribute("alt")
+                else:
+                    name = await elem.inner_text()
+                
+                if name:
+                    deal["deal_name"] = name.strip()
+                    break
+            except Exception:
+                continue
+        
+        # Extract price
+        try:
+            price_elem = panel.locator("[data-test-id='bb-product-price']").first
+            price_text = await price_elem.inner_text()
+            price = self.extract_price(price_text)
+            if price:
+                deal["monthly_price"] = price
+        except Exception:
+            pass
+        
+        # Extract speed from selling points
+        try:
+            selling_points = await panel.locator("[data-test-id='bb-selling-point']").all_inner_texts()
+            
+            for point in selling_points:
+                point_lower = point.lower()
+                
+                if "download speed" in point_lower:
+                    speed = self.extract_speed(point)
+                    if speed:
+                        deal["download_speed"] = speed
+                
+                elif "upload speed" in point_lower:
+                    speed = self.extract_speed(point)
+                    if speed:
+                        deal["upload_speed"] = speed
+                
+                elif "contract" in point_lower or "month" in point_lower:
+                    length = self.extract_contract_length(point)
+                    if length:
+                        deal["contract_length"] = length
+        except Exception:
+            pass
+        
+        # Extract contract from suffix/disclaimer
+        if not deal.get("contract_length"):
+            try:
+                suffix = await panel.locator("[data-test-id='bb-product-price-suffix']").inner_text()
+                length = self.extract_contract_length(suffix)
+                if length:
+                    deal["contract_length"] = length
+            except Exception:
+                pass
+        
+        # Set defaults
+        deal.setdefault("deal_name", "Sky Broadband")
+        deal.setdefault("contract_length", 24)
+        deal.setdefault("data_allowance", "Unlimited")
+        deal["url"] = self.page.url
+        
+        # Only return if we have essential data
+        if deal.get("monthly_price") and deal.get("download_speed"):
+            return deal
+        
+        return None
+    
+    async def _scrape_card_layout(self, postcode: str) -> List[Dict[str, Any]]:
+        """Scrape products from card-based layout."""
+        deals = []
+        
+        # Try multiple card selectors
+        cards = None
+        for sel in self.CARD_SELECTORS:
+            loc = self.page.locator(sel)
+            try:
+                if await loc.count() > 0:
+                    cards = loc
+                    break
+            except Exception:
+                continue
+        
+        if not cards:
+            return []
+        
+        card_count = await cards.count()
+        logger.info(f"{self.provider_name.upper()}: Found {card_count} product cards")
+        
+        for i in range(card_count):
+            card = cards.nth(i)
+            
+            try:
+                deal = await self._parse_card(card, postcode)
+                if deal:
+                    deals.append(deal)
+            except Exception as e:
+                logger.warning(f"{self.provider_name.upper()}: Failed to parse card {i + 1}: {str(e)}")
+                continue
+        
+        return deals
+    
+    async def _parse_card(self, card, postcode: str) -> Optional[Dict[str, Any]]:
+        """Parse a single product card."""
+        try:
+            card_text = await card.inner_text()
+        except Exception:
+            return None
+        
+        deal = {"postcode": postcode}
+        
+        # Extract title
+        for sel in self.TITLE_SELECTORS:
+            try:
+                elem = card.locator(sel).first
+                if await elem.count() > 0:
+                    title = await elem.inner_text()
+                    if title:
+                        deal["deal_name"] = title.strip()
+                        break
+            except Exception:
+                continue
+        
+        # Extract price
+        for sel in self.PRICE_SELECTORS:
+            try:
+                elem = card.locator(sel).first
+                if await elem.count() > 0:
+                    price_text = await elem.inner_text()
+                    price = self.extract_price(price_text)
+                    if price:
+                        deal["monthly_price"] = price
+                        break
+            except Exception:
+                continue
+        
+        # Extract speed
+        for sel in self.SPEED_SELECTORS:
+            try:
+                elem = card.locator(sel).first
+                if await elem.count() > 0:
+                    speed_text = await elem.inner_text()
+                    speed = self.extract_speed(speed_text)
+                    if speed:
+                        deal["download_speed"] = speed
+                        break
+            except Exception:
+                continue
+        
+        # Extract from full text as fallback
+        if not deal.get("monthly_price"):
+            price = self.extract_price(card_text)
+            if price:
+                deal["monthly_price"] = price
+        
+        if not deal.get("download_speed"):
+            speed = self.extract_speed(card_text)
+            if speed:
+                deal["download_speed"] = speed
+        
+        # Extract contract length
+        length = self.extract_contract_length(card_text)
+        if length:
+            deal["contract_length"] = length
+        
+        # Set defaults
+        deal.setdefault("deal_name", "Sky Broadband")
+        deal.setdefault("contract_length", 24)
+        deal.setdefault("data_allowance", "Unlimited")
+        deal["url"] = self.page.url
+        
+        # Only return if we have essential data
+        if deal.get("monthly_price") and deal.get("download_speed"):
+            return deal
+        
+        return None
+    
+    async def extract_deals(self) -> List[Dict[str, Any]]:
+        """
+        Extract deals - not used in custom scrape() implementation.
+        Sky requires custom navigation flow.
+        """
+        return []
+    
+    async def scrape(self, postcode: str, address: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Main scraping workflow for Sky with custom navigation.
+        
+        Args:
+            postcode: UK postcode to search
+            address: Specific address (not used, auto-selects first)
+            
+        Returns:
+            List of broadband deals
+        """
+        try:
+            # Initialize browser
+            await self.initialize_browser()
+            
+            # Navigate to landing page
+            await self.navigate_to_page()
+            logger.info(f"{self.provider_name.upper()}: On landing page")
+            
+            # Handle cookies
+            await self.handle_cookies()
+            
+            # Click 'See deals' to get to postcode entry
+            clicked = await self._click_see_deals()
+            if not clicked:
+                logger.warning(f"{self.provider_name.upper()}: 'See deals' button not found")
+            
+            # Enter postcode
+            await self.enter_postcode(postcode)
+            
+            # Select address
+            await self._select_first_address()
+            
+            # Handle moving prompt
+            await self._handle_moving_prompt()
+            
+            # Click final CTA
+            await self._click_final_cta()
+            
+            # Wait for results
+            try:
+                await self.page.wait_for_selector("text=/great news|available/i", timeout=12000)
+            except PlaywrightTimeoutError:
+                logger.info(f"{self.provider_name.upper()}: Results banner not detected")
+            
+            # Try to show more options
+            await self._click_show_more()
+            
+            # Try tabbed layout first (Sky's preferred layout)
+            deals = await self._scrape_tabbed_products(postcode)
+            
+            if deals:
+                logger.info(f"{self.provider_name.upper()}: Extracted {len(deals)} deals from tabs")
+                return deals
+            
+            # Fallback to card layout
+            deals = await self._scrape_card_layout(postcode)
+            
+            if deals:
+                logger.info(f"{self.provider_name.upper()}: Extracted {len(deals)} deals from cards")
+                return deals
+            
+            # No deals found
+            logger.warning(f"{self.provider_name.upper()}: No deals found")
+            return []
+        
+        except Exception as e:
+            logger.error(f"{self.provider_name.upper()}: Scraping failed: {str(e)}", exc_info=True)
+            return []
