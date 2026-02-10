@@ -1,0 +1,57 @@
+{
+  "application": {
+    "name": "BB Price Compare",
+    "version": "1.0.0",
+    "description": "UK Broadband Price Comparison Tool"
+  },
+  "scraping": {
+    "default_timeout": 30000,
+    "page_load_timeout": 60000,
+    "element_timeout": 10000,
+    "retry_attempts": 3,
+    "retry_delay": 2000,
+    "rate_limit_delay": 3000,
+    "headless": true,
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    }
+  },
+  "browser": {
+    "browser_type": "chromium",
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "accept_downloads": false,
+    "locale": "en-GB",
+    "timezone": "Europe/London"
+  },
+  "concurrency": {
+    "max_concurrent_scrapers": 3,
+    "max_browser_instances": 3
+  },
+  "output": {
+    "directory": "output",
+    "default_format": "csv",
+    "formats_enabled": ["csv", "excel", "json"],
+    "filename_template": "broadband_comparison_{timestamp}",
+    "include_metadata": true,
+    "include_timestamp": true
+  },
+  "logging": {
+    "level": "INFO",
+    "log_to_file": true,
+    "log_to_console": true,
+    "log_directory": "logs",
+    "log_filename": "bb_compare_{date}.log",
+    "max_file_size": 10485760,
+    "backup_count": 5,
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  },
+  "data_validation": {
+    "validate_postcode": true,
+    "validate_prices": true,
+    "validate_speeds": true,
+    "min_download_speed": 10,
+    "max_download_speed": 10000,
+    "currency": "GBP"
+  }
+}
