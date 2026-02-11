@@ -1,8 +1,10 @@
 """BT Broadband scraper implementation with lazy loading support."""
 
 import re
-from typing import List, Dict, Any, Optional
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+import os
+from typing import List, Dict, Any, Optional, Tuple
+from urllib.parse import urlparse  # Add this import
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 from src.scrapers.base_scraper import BaseScraper
 from src.utils.logger import setup_logger
 
@@ -25,6 +27,130 @@ class BTScraper(BaseScraper):
     @property
     def provider_name(self) -> str:
         return "bt"
+    
+    def _load_provider_config(self) -> dict:
+        """
+        Loads the configuration for the BT provider.
+        First checks if it exists in provided config, then looks for a local provider.json.
+        """
+        for attr in ("provider_config", "config", "providers_config"):
+            cfg = getattr(self, attr, None)
+            if isinstance(cfg, dict):
+                if "bt" in cfg and isinstance(cfg["bt"], dict):
+                    return cfg["bt"]
+                if "url" in cfg:
+                    return cfg
+
+        # Check for provider.json in the current directory or parent directories
+        here = Path(__file__).resolve()
+        for parent in [here.parent] + list(here.parents):
+            candidate = parent / "provider.json"
+            if candidate.exists():
+                data = json.loads(candidate.read_text(encoding="utf-8"))
+                bt_cfg = data.get("bt")
+                if isinstance(bt_cfg, dict):
+                    return bt_cfg
+
+        return {}
+    
+    async def _profile_from_url(self, url: str) -> Tuple[str, dict, str, str]:
+        """
+        Extracts profile information like timezone, geolocation, and language preferences based on URL.
+        """
+        parsed_url = urlparse(url)
+        domain = (parsed_url.netloc or "").lower()
+
+        timezone_id = "Europe/London"
+        geolocation = {"latitude": 51.5074, "longitude": -0.1278}
+        locale = "en-GB"
+        accept_language = "en-GB,en;q=0.9"
+
+        return timezone_id, geolocation, locale, accept_language
+    
+    async def _ensure_page(self) -> None:
+        if getattr(self, "page", None):
+            return
+
+        self._owns_playwright = True
+
+        # Load BT-specific config
+        cfg = self._load_provider_config()
+        url = cfg.get("url", "https://www.bt.com/broadband")  # Default BT URL
+        timeout = int(cfg.get("timeout") or 30000)
+
+        # Await the async function here
+        timezone_id, geolocation, locale, accept_language = await self._profile_from_url(url)
+
+        # Headless mode and other configurations
+        env_headless = os.getenv("BT_HEADLESS")
+        headless = env_headless is not None and env_headless.strip().lower() in ("1", "true", "yes")
+        slowmo = int(os.getenv("BT_SLOWMO", "0") or "0")
+        proxy_server = os.getenv("BT_PROXY_SERVER")
+        proxy = {"server": proxy_server} if proxy_server else None
+
+        # Initialize Playwright and browser
+        self._pw = await async_playwright().start()
+        launch_args = [
+            "--disable-blink-features=AutomationControlled",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--start-maximized",
+        ]
+
+        try:
+            self._browser = await self._pw.chromium.launch(
+                headless=headless,
+                proxy=proxy,
+                slow_mo=slowmo,
+                args=launch_args,
+            )
+        except Exception:
+            self._browser = await self._pw.chromium.launch(
+                headless=headless,
+                proxy=proxy,
+                slow_mo=slowmo,
+                args=launch_args,
+            )
+
+        self._context = await self._browser.new_context(
+            viewport={"width": 1366, "height": 768},
+            locale=locale,
+            timezone_id=timezone_id,
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            permissions=["geolocation"],
+            geolocation=geolocation,
+            color_scheme="light",
+            extra_http_headers={"Accept-Language": accept_language},
+            ignore_https_errors=True,
+        )
+
+        await self._context.add_init_script(
+            """
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-GB', 'en'] });
+            """
+        )
+
+        # Create a new page
+        self.page = await self._context.new_page()
+        self.page.set_default_timeout(timeout)
+
+
+
+    async def _dismiss_modal_if_present(self, modal_close_selector: str):
+        """Helper method to dismiss the modal if it's visible."""
+        try:
+            modal_count = await self.page.locator(modal_close_selector).count()
+            if modal_count > 0:
+                close_button = self.page.locator(modal_close_selector).first
+                await close_button.scroll_into_view_if_needed()
+                if await close_button.is_visible():
+                    await close_button.click()
+                    logger.info("Dismissed modal successfully.")
+                else:
+                    logger.warning("Modal close button not visible, skipping.")
+        except Exception as e:
+            logger.warning(f"Error while dismissing modal: {str(e)}")
     
     async def enter_postcode_and_select_address(self, postcode: str, preferred_address: Optional[str] = None) -> bool:
         """
@@ -53,18 +179,12 @@ class BTScraper(BaseScraper):
                 await postcode_input.fill("")  # Clear field before typing
                 for char in postcode.strip():
                     await postcode_input.type(char, delay=200)
-                await self.page.wait_for_timeout(8000)
+                await self.page.wait_for_timeout(4000)
 
                 # -----------------------------
                 # Check for error modal after postcode entry
                 # -----------------------------
-                modal_count = await self.page.locator(modal_close_selector).count()
-                if modal_count > 0:
-                    close_button = self.page.locator(modal_close_selector).first
-                    await close_button.click()
-                    logger.info("BT: Error modal appeared after postcode entry, clicked Close")
-                    await self.page.wait_for_timeout(8000)
-                    continue  # retry the whole loop
+                await self._dismiss_modal_if_present(modal_close_selector)
 
                 # -----------------------------
                 # Step 2: Wait for addresses or product cards
@@ -72,7 +192,7 @@ class BTScraper(BaseScraper):
                 try:
                     await self.page.wait_for_selector(
                         f"{address_button_selector}, [data-testid='product-card']",
-                        timeout=5000  # Increased timeout for address selection/loading
+                        timeout=10000  # Increased timeout for address selection/loading
                     )
                 except PlaywrightTimeoutError:
                     logger.warning("BT: Address list or product cards not loaded yet, retrying...")
@@ -109,39 +229,22 @@ class BTScraper(BaseScraper):
                 # -----------------------------
                 # Step 4: Check for error modal after address selection
                 # -----------------------------
-                modal_count = await self.page.locator(modal_close_selector).count()
-                if modal_count > 0:
-                    # First, check if modal is inside an iframe or shadow DOM (if applicable)
-                    try:
-                        iframe = self.page.frame_locator('iframe')  # If iframe is present, get it.
-                        modal_iframe_close = iframe.locator(modal_close_selector)
-                        if await modal_iframe_close.count() > 0:
-                            await modal_iframe_close.click()
-                            logger.info("Clicked Close button inside iframe")
-                    except Exception:
-                        pass
-
-                    # If not inside iframe, handle directly in the page
-                    close_button = self.page.locator(modal_close_selector).first
-                    await close_button.scroll_into_view_if_needed()
-
-                    # Check visibility of the close button
-                    if await close_button.is_visible():
-                        await close_button.click()
-                        logger.info("BT: Error modal appeared after address selection, clicked Close")
-                        await self.page.wait_for_timeout(8000)
-                        continue  # retry the whole loop
+                await self._dismiss_modal_if_present(modal_close_selector)
 
                 # -----------------------------
-                # Step 5: Wait for plan/product cards
+                # Step 5: Wait for plan/product cards with proper timeout handling
                 # -----------------------------
-                # Now wait for the product cards to load
-                logger.info("BT: Waiting for product cards to load after address selection...")
-                await self.page.wait_for_selector("[data-testid='product-card']", timeout=15000)
-    
-                # If product cards are visible, return True and exit the loop
-                logger.info("BT: Product cards loaded successfully.")
-                return True  # Exit loop successfully
+                try:
+                    # Wait for product cards to appear after address selection
+                    await self.page.wait_for_selector("[data-testid='product-card']", timeout=20000)  # wait for product cards to load
+                    logger.info("BT: Product cards loaded successfully.")
+
+                    # Now that the plan page is fully loaded, return True and continue to the next step
+                    return True  # Exit the loop and return True to continue scraping
+
+                except PlaywrightTimeoutError:
+                    logger.warning("BT: Product cards did not load after address selection.")
+                    continue  # retry the whole loop if timeout happens
 
             except Exception as e:
                 logger.warning(f"BT: Attempt {attempt} failed: {e}")
@@ -152,6 +255,7 @@ class BTScraper(BaseScraper):
 
         logger.error(f"BT: Failed to enter postcode and select address after {max_attempts} attempts")
         return False
+
 
 
     def _card_locator(self):
@@ -591,13 +695,13 @@ class BTScraper(BaseScraper):
             # -------------------------
             # Step 1: Initialize browser and go to landing page
             # -------------------------
-            await self.initialize_browser()
-            await self.navigate_to_page()
+            await self._ensure_page()  # Ensure page is initialized
+            await self.page.goto("https://www.bt.com/broadband")  # Go to the BT landing page
             logger.info(f"{self.provider_name.upper()}: On landing page")
-            await self.handle_cookies()
+            await self.handle_cookies()  # Handle cookies if necessary
 
             # -------------------------
-            # Step 2: Enter postcode and address
+            # Step 2: Enter postcode and select address
             # -------------------------
             success = await self.enter_postcode_and_select_address(postcode, address)
             if not success:
@@ -613,11 +717,7 @@ class BTScraper(BaseScraper):
             await self.page.wait_for_selector("[data-testid='product-card']", timeout=15000)
             await self.page.wait_for_timeout(500)
 
-            deals_24 = await self._scrape_cards(
-                postcode,
-                contract_term=24,
-                min_cards=4
-            )
+            deals_24 = await self._scrape_cards(postcode, contract_term=24, min_cards=4)
             all_deals.extend(deals_24)
 
             # -------------------------
@@ -628,11 +728,7 @@ class BTScraper(BaseScraper):
             if switched:
                 # Allow extra time for cards to lazy-load
                 await self.page.wait_for_timeout(2000)
-                deals_12 = await self._scrape_cards(
-                    postcode,
-                    contract_term=12,
-                    min_cards=6  # ensure enough cards are loaded
-                )
+                deals_12 = await self._scrape_cards(postcode, contract_term=12, min_cards=6)
                 all_deals.extend(deals_12)
             else:
                 logger.warning(f"{self.provider_name.upper()}: Could not access 12-month contracts")
