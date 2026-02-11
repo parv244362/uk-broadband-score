@@ -129,7 +129,7 @@ class BaseScraper(ABC):
                     
                     if button:
                         await button.click()
-                        logger.info(f"{self.provider_name.upper()}: Cookies rejected successfully")
+                        logger.info(f"{self.provider_name.upper()}: Cookies accepted successfully")
                         await self.page.wait_for_timeout(1000)
                         return True
                         
