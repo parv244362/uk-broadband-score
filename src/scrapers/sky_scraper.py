@@ -372,7 +372,7 @@ class SkyScraper(BaseScraper):
             html = await self.page.content()
             blob = (body_text or "") + "\n" + (html or "")
 
-            price_pat = r"(?:£|&pound;)\s*([0-9]+(?:\.[0-9]+)?)\s*(?:/|per\s*)?(?:month|mo|pm|a\s*month)"
+            price_pat = r"(?:£|&pound;)\s*([0-9]+(?:\.[0-9]+)?)\s*(?:/|per\s*)?(?:month|mo|pm)"##|a\s*month)"
 
             packages = [
                 {"name": "Full Fibre 100", "speed": 100, "pattern": rf"Full\s*Fibre\s*100.*?{price_pat}"},
@@ -405,5 +405,6 @@ class SkyScraper(BaseScraper):
             logger.error(f"{self.provider_name.upper()}: Error extracting deals: {e}")
 
         return deals
+
 
 
