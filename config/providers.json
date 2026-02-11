@@ -31,13 +31,18 @@
     "timeout": 30000,
     "wait_for_selector": "body",
     "cookie_selectors": [
-      "button[data-cookie-reject='true']",
-      "button:has-text('Reject')",
-      ".cookie-banner__reject"
+      "button[data-cookie-accept='true']",
+      "button:has-text('Accept all')",
+      "button:has-text('Accept All')",
+      "button:has-text('Accept')",
+      "button:has-text('Agree')",
+      "button:has-text('Allow all')",
+      ".cookie-banner__accept",
+      "#onetrust-accept-btn-handler"
     ],
-    "postcode_input_selector": "input[id='postcode']",
-    "postcode_submit_selector": "button.postcode-search",
-    "address_dropdown_selector": "select#address-list",
+    "postcode_input_selector": "input[id='sc-postcode']",
+    "postcode_submit_selector": "button:has-text('See your deals')",
+    "address_option_selector": "#custom-select-address button",
     "deal_container_selector": ".product-card",
     "extraction_map": {
       "deal_name": ".product-name",
@@ -56,12 +61,12 @@
     "timeout": 30000,
     "wait_for_selector": "body",
     "cookie_selectors": [
-      "button[data-test='cookie-reject']",
-      "button:has-text('Reject all')",
-      ".cookie-banner button.reject"
+    "button[data-test='cookie-accept']",
+    "button:has-text('Accept all')",
+    ".cookie-banner button.accept"
     ],
     "postcode_input_selector": "input[name='postcode']",
-    "postcode_submit_selector": "button.check-availability",
+    "postcode_submit_selector": "button:has-text('Continue')",
     "address_dropdown_selector": "select[name='address']",
     "deal_container_selector": ".package-tile",
     "extraction_map": {
