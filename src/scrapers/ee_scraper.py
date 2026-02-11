@@ -215,7 +215,6 @@ class EEScraper(BaseScraper):
                 "installation_type": "Standard",
                 "technology_type": "FTTC" if download_speed < 100 else "FTTP",
                 "url": self.page.url,
-                "upfront_cost": 0.0
             }
 
             logger.debug(
