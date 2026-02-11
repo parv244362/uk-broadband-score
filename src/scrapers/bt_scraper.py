@@ -7,6 +7,8 @@ from urllib.parse import urlparse  # Add this import
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 from src.scrapers.base_scraper import BaseScraper
 from src.utils.logger import setup_logger
+from pathlib import Path
+import json
 
 logger = setup_logger(__name__)
 
@@ -92,21 +94,27 @@ class BTScraper(BaseScraper):
         self._pw = await async_playwright().start()
         launch_args = [
             "--disable-blink-features=AutomationControlled",
+            "--disable-features=LocalNetworkAccessChecks",
             "--no-sandbox",
             "--disable-dev-shm-usage",
+            "--disable-infobars",
             "--start-maximized",
+            "--window-size=1920,1080",
+            "--window-position=0,0",
+            "--disable-features=WebBluetooth",
         ]
 
         try:
             self._browser = await self._pw.chromium.launch(
-                headless=True,
+                channel="chrome",
+                headless=headless,
                 proxy=proxy,
                 slow_mo=slowmo,
                 args=launch_args,
             )
         except Exception:
             self._browser = await self._pw.chromium.launch(
-                headless=True,
+                headless=headless,
                 proxy=proxy,
                 slow_mo=slowmo,
                 args=launch_args,
@@ -116,7 +124,11 @@ class BTScraper(BaseScraper):
             viewport={"width": 1366, "height": 768},
             locale=locale,
             timezone_id=timezone_id,
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
             permissions=["geolocation"],
             geolocation=geolocation,
             color_scheme="light",
@@ -128,12 +140,17 @@ class BTScraper(BaseScraper):
             """
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
             Object.defineProperty(navigator, 'languages', { get: () => ['en-GB', 'en'] });
+            Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+            window.chrome = window.chrome || { runtime: {} };
             """
         )
 
         # Create a new page
         self.page = await self._context.new_page()
         self.page.set_default_timeout(timeout)
+
+        self.browser = self._browser
+        self.context = self._context
 
 
     async def _dismiss_modal_if_present(self, modal_close_selector: str):
@@ -598,7 +615,7 @@ class BTScraper(BaseScraper):
     
                     await target.scroll_into_view_if_needed()
                     await target.click()
-                    await self.page.wait_for_timeout(800)
+                    await self.page.wait_for_timeout(10000)
                     logger.info(f"{self.provider_name.upper()}: Clicked modal to confirm 12-month switch")
                     return True
     
@@ -607,7 +624,7 @@ class BTScraper(BaseScraper):
     
             # Slight scroll and retry
             await self._nudge_scroll()
-            await self.page.wait_for_timeout(500)
+            await self.page.wait_for_timeout(10000)
     
         return False
     
@@ -645,7 +662,7 @@ class BTScraper(BaseScraper):
             # Scroll into view and click
             await tab.scroll_into_view_if_needed()
             await tab.click()
-            await self.page.wait_for_timeout(500)
+            await self.page.wait_for_timeout(10000)
             logger.info(f"{self.provider_name.upper()}: Clicked 12-month contract tab")
     
             # Handle modal if it appears
@@ -746,4 +763,3 @@ class BTScraper(BaseScraper):
         except Exception as e:
             logger.error(f"{self.provider_name.upper()}: Scraping failed: {str(e)}", exc_info=True)
             return []
-
