@@ -136,7 +136,6 @@ class BTScraper(BaseScraper):
         self.page.set_default_timeout(timeout)
 
 
-
     async def _dismiss_modal_if_present(self, modal_close_selector: str):
         """Helper method to dismiss the modal if it's visible."""
         try:
@@ -151,6 +150,7 @@ class BTScraper(BaseScraper):
                     logger.warning("Modal close button not visible, skipping.")
         except Exception as e:
             logger.warning(f"Error while dismissing modal: {str(e)}")
+            
     
     async def enter_postcode_and_select_address(self, postcode: str, preferred_address: Optional[str] = None) -> bool:
         """
