@@ -107,14 +107,14 @@ class BTScraper(BaseScraper):
         try:
             self._browser = await self._pw.chromium.launch(
                 channel="chrome",
-                headless=headless,
+                headless=True,
                 proxy=proxy,
                 slow_mo=slowmo,
                 args=launch_args,
             )
         except Exception:
             self._browser = await self._pw.chromium.launch(
-                headless=headless,
+                headless=True,
                 proxy=proxy,
                 slow_mo=slowmo,
                 args=launch_args,
@@ -763,3 +763,4 @@ class BTScraper(BaseScraper):
         except Exception as e:
             logger.error(f"{self.provider_name.upper()}: Scraping failed: {str(e)}", exc_info=True)
             return []
+
