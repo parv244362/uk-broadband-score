@@ -107,14 +107,14 @@ class SkyScraper(BaseScraper):
         try:
             self._browser = await self._pw.chromium.launch(
                 channel="chrome",
-                headless=True,
+                headless=headless,
                 proxy=proxy,
                 slow_mo=slowmo,
                 args=launch_args,
             )
         except Exception:
             self._browser = await self._pw.chromium.launch(
-                headless=True,
+                headless=headless,
                 proxy=proxy,
                 slow_mo=slowmo,
                 args=launch_args,
@@ -405,4 +405,5 @@ class SkyScraper(BaseScraper):
             logger.error(f"{self.provider_name.upper()}: Error extracting deals: {e}")
 
         return deals
+
 
