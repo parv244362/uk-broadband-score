@@ -3,11 +3,13 @@
 import os
 import re
 import json
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 from typing import List, Dict, Any, Optional, Tuple
 
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError, async_playwright
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import async_playwright
 
 from src.scrapers.base_scraper import BaseScraper
 from src.utils.logger import setup_logger
@@ -55,31 +57,11 @@ class SkyScraper(BaseScraper):
             geolocation = {"latitude": 51.5074, "longitude": -0.1278}  # London
             locale = "en-GB"
             accept_language = "en-GB,en;q=0.9"
-        elif ".com.au" in domain or domain.endswith(".au"):
-            timezone_id = "Australia/Sydney"
-            geolocation = {"latitude": -33.8688, "longitude": 151.2093}
-            locale = "en-AU"
-            accept_language = "en-AU,en;q=0.9"
-        elif domain.endswith(".ca"):
-            timezone_id = "America/Toronto"
-            geolocation = {"latitude": 43.6532, "longitude": -79.3832}
-            locale = "en-CA"
-            accept_language = "en-CA,en;q=0.9"
-        elif domain.endswith(".de"):
-            timezone_id = "Europe/Berlin"
-            geolocation = {"latitude": 52.5200, "longitude": 13.4050}
-            locale = "de-DE"
-            accept_language = "de-DE,de;q=0.9,en;q=0.8"
-        elif domain.endswith(".fr"):
-            timezone_id = "Europe/Paris"
-            geolocation = {"latitude": 48.8566, "longitude": 2.3522}
-            locale = "fr-FR"
-            accept_language = "fr-FR,fr;q=0.9,en;q=0.8"
         else:
-            timezone_id = "America/New_York"
-            geolocation = {"latitude": 40.7128, "longitude": -74.0060}
-            locale = "en-US"
-            accept_language = "en-US,en;q=0.9"
+            timezone_id = "Europe/London"
+            geolocation = {"latitude": 51.5074, "longitude": -0.1278}
+            locale = "en-GB"
+            accept_language = "en-GB,en;q=0.9"
 
         return timezone_id, geolocation, locale, accept_language
 
@@ -92,35 +74,50 @@ class SkyScraper(BaseScraper):
 
         self._owns_playwright = True
 
+        cfg = self._load_provider_config()
+        url = cfg.get("url")
+        timeout = int(cfg.get("timeout") or 30000)
+
+        timezone_id, geolocation, locale, accept_language = self._profile_from_url(url)
+
         env_headless = os.getenv("SKY_HEADLESS")
         if env_headless is not None:
             headless = env_headless.strip().lower() in ("1", "true", "yes")
         else:
             headless = bool(getattr(self, "headless", True))
 
-        cfg = self._load_provider_config()
-        url = cfg.get("url")##, "https://www.sky.com/broadband")
-        timeout = int(cfg.get("timeout") or 30000)
-
-        timezone_id, geolocation, locale, accept_language = self._profile_from_url(url)
-
-        proxy_server = os.getenv("SKY_PROXY_SERVER")  # optional; no creds required
+        slowmo = int(os.getenv("VM_SLOWMO", "0") or "0")
+        proxy_server = os.getenv("VM_PROXY_SERVER")
         proxy = {"server": proxy_server} if proxy_server else None
 
         self._pw = await async_playwright().start()
+
+        launch_args = [
+            "--disable-blink-features=AutomationControlled",
+            "--disable-features=LocalNetworkAccessChecks",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-infobars",
+            "--start-maximized",
+            "--window-size=1920,1080",
+            "--window-position=0,0",
+            "--disable-features=WebBluetooth",
+        ]
 
         try:
             self._browser = await self._pw.chromium.launch(
                 channel="chrome",
                 headless=headless,
                 proxy=proxy,
-                args=["--disable-blink-features=AutomationControlled"],
+                slow_mo=slowmo,
+                args=launch_args,
             )
         except Exception:
             self._browser = await self._pw.chromium.launch(
                 headless=headless,
                 proxy=proxy,
-                args=["--disable-blink-features=AutomationControlled"],
+                slow_mo=slowmo,
+                args=launch_args,
             )
 
         self._context = await self._browser.new_context(
@@ -143,6 +140,9 @@ class SkyScraper(BaseScraper):
         await self._context.add_init_script(
             """
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-GB', 'en'] });
+            Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+            window.chrome = window.chrome || { runtime: {} };
             """
         )
 
